@@ -1,8 +1,11 @@
+import NIOConcurrencyHelpers
+
 /// Default buckets used by Histograms
 public var defaultBuckets = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0, Double.greatestFiniteMagnitude]
 
 /// Label type Histograms can use
 public protocol HistogramLabels: MetricLabels {
+    /// Bucket
     var le: String { get set }
 }
 
@@ -17,9 +20,9 @@ extension HistogramLabels {
 /// Prometheus Histogram metric
 ///
 /// See https://prometheus.io/docs/concepts/metric_types/#Histogram
-public class Histogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: Metric, PrometheusHandled {
+public class PromHistogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: Metric, PrometheusHandled {
     /// Prometheus instance that created this Histogram
-    internal let prometheus: PrometheusClient
+    internal weak var prometheus: PrometheusClient?
     
     /// Name of this Histogram, required
     public let name: String
@@ -30,7 +33,7 @@ public class Histogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: M
     public let _type: MetricType = .histogram
     
     /// Bucketed values for this Histogram
-    private var buckets: [Counter<NumType, EmptyLabels>] = []
+    private var buckets: [PromCounter<NumType, EmptyLabels>] = []
     
     /// Buckets used by this Histogram
     internal let upperBounds: [Double]
@@ -39,10 +42,13 @@ public class Histogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: M
     internal private(set) var labels: Labels
     
     /// Sub Histograms for this Histogram
-    fileprivate var subHistograms: [Histogram<NumType, Labels>] = []
+    fileprivate var subHistograms: [PromHistogram<NumType, Labels>] = []
     
     /// Total value of the Histogram
-    private let total: Counter<NumType, EmptyLabels>
+    private let total: PromCounter<NumType, EmptyLabels>
+    
+    /// Lock used for thread safety
+    private let lock: Lock
     
     /// Creates a new Histogram
     ///
@@ -64,6 +70,8 @@ public class Histogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: M
         
         self.upperBounds = buckets
         
+        self.lock = Lock()
+        
         buckets.forEach { _ in
             self.buckets.append(.init("\(name)_bucket", nil, 0, p))
         }
@@ -71,10 +79,10 @@ public class Histogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: M
     
     /// Gets the metric string for this Histogram
     ///
-    /// - Parameters:
-    ///     - done: Newline separated Prometheus-formatted metric string
-    public func getMetric(_ done: @escaping (String) -> Void) {
-        prometheusQueue.async(flags: .barrier) {
+    /// - Returns:
+    ///     Newline seperated Prometheus formatted metric string
+    public func getMetric() -> String {
+        return self.lock.withLock {
             var output = [String]()
             
             if let help = self.help {
@@ -114,7 +122,7 @@ public class Histogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: M
             
             self.labels.le = ""
             
-            done(output.joined(separator: "\n"))
+            return output.joined(separator: "\n")
         }
     }
     
@@ -123,32 +131,28 @@ public class Histogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: M
     /// - Parameters:
     ///     - value: Value to observe
     ///     - labels: Labels to attach to the observed value
-    ///     - done: Completion handler
-    public func observe(_ value: NumType, _ labels: Labels? = nil, _ done: @escaping () -> Void = { }) {
-        prometheusQueue.async(flags: .barrier) {
-            let completion: () -> Void = {
-                self.total.inc(value)
-
-                for (i, bound) in self.upperBounds.enumerated() {
-                    if bound >= value.doubleValue {
-                        self.buckets[i].inc()
-                        break
-                    }
-                }
-                done()
-            }
-            
+    public func observe(_ value: NumType, _ labels: Labels? = nil) {
+        self.lock.withLock {
             if let labels = labels, type(of: labels) != type(of: EmptySummaryLabels()) {
-                let his = self.prometheus.getOrCreateHistogram(with: labels, for: self)
-                return his.observe(value, nil, completion)
+                guard let his = self.prometheus?.getOrCreateHistogram(with: labels, for: self) else { fatalError("Lingering Histogram") }
+                his.observe(value)
             }
-            return completion()
+            self.total.inc(value)
+            
+            for (i, bound) in self.upperBounds.enumerated() {
+                if bound >= value.doubleValue {
+                    self.buckets[i].inc()
+                    return
+                }
+            }
         }
     }
+
 }
 
 extension PrometheusClient {
-    fileprivate func getOrCreateHistogram<T: Numeric, U: HistogramLabels>(with labels: U, for his: Histogram<T, U>) -> Histogram<T, U> {
+    /// Helper for histograms & labels
+    fileprivate func getOrCreateHistogram<T: Numeric, U: HistogramLabels>(with labels: U, for his: PromHistogram<T, U>) -> PromHistogram<T, U> {
         let histograms = his.subHistograms.filter { (metric) -> Bool in
             guard metric.name == his.name, metric.help == his.help, metric.labels == labels else { return false }
             return true
@@ -157,7 +161,7 @@ extension PrometheusClient {
         if let histogram = histograms.first {
             return histogram
         } else {
-            let histogram = Histogram<T, U>(his.name, his.help, labels, his.upperBounds, self)
+            let histogram = PromHistogram<T, U>(his.name, his.help, labels, his.upperBounds, self)
             his.subHistograms.append(histogram)
             return histogram
         }
