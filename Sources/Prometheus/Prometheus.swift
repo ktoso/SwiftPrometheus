@@ -6,7 +6,7 @@ import NIOConcurrencyHelpers
 public class PrometheusClient {
     
     /// Metrics tracked by this Prometheus instance
-    private var metrics: [Metric]
+    private var metrics: [PromMetric]
     
     /// To keep track of the type of a metric since  it can not change
     /// througout the lifetime of the program
@@ -33,17 +33,21 @@ public class PrometheusClient {
     
     // MARK: - Metric Access
     
-    public func removeMetric(_ metric: Metric) {
+    public func removeMetric(_ metric: PromMetric) {
         // `metricTypeMap` is left untouched as those must be consistent
         // throughout the lifetime of a program.
         return lock.withLock {
-            self.metrics.removeAll { $0._type == metric._type && $0.name == metric.name }
+            self.metrics.removeAll { type(of: $0) == type(of: metric) && $0.name == metric.name }
         }
     }
     
-    public func getMetricInstance<T>(with name: String, andType type: MetricType) -> T? where T: Metric {
+    public func getMetricInstance<T>(with name: String) -> T? where T: PromMetric {
         return lock.withLock {
-            self.metrics.compactMap { $0 as? T }.filter { $0.name == name && $0._type == type }.first
+            guard let metric = (self.metrics.compactMap { $0 as? T }.filter { $0.name == name }.first) else {
+                return nil
+            }
+
+            return metric as? T
         }
     }
     

@@ -20,7 +20,7 @@ extension HistogramLabels {
 /// Prometheus Histogram metric
 ///
 /// See https://prometheus.io/docs/concepts/metric_types/#Histogram
-public class PromHistogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: Metric, PrometheusHandled {
+public class PromHistogram<NumType: DoubleRepresentable, Labels: HistogramLabels>: PromMetric, PrometheusHandled {
     /// Prometheus instance that created this Histogram
     internal weak var prometheus: PrometheusClient?
     

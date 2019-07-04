@@ -103,9 +103,9 @@ extension PrometheusClient: MetricsFactory {
     /// Makes a counter
     public func makeCounter(label: String, dimensions: [(String, String)]) -> CounterHandler {
         let createHandler = { (counter: PromCounter) -> CounterHandler in
-            return MetricsCounter(counter: counter, dimensions: dimensions)
+            MetricsCounter(counter: counter, dimensions: dimensions)
         }
-        if let counter: PromCounter<Int64, DimensionLabels> = self.getMetricInstance(with: label, andType: .counter) {
+        if let counter: PromCounter<Int64, DimensionLabels> = self.getMetricInstance(with: label) {
             return createHandler(counter)
         }
         return createHandler(self.createCounter(forType: Int64.self, named: label, withLabelType: DimensionLabels.self))
@@ -118,9 +118,9 @@ extension PrometheusClient: MetricsFactory {
     
     private func makeGauge(label: String, dimensions: [(String, String)]) -> RecorderHandler {
         let createHandler = { (gauge: PromGauge) -> RecorderHandler in
-            return MetricsGauge(gauge: gauge, dimensions: dimensions)
+            MetricsGauge(gauge: gauge, dimensions: dimensions)
         }
-        if let gauge: PromGauge<Double, DimensionLabels> = self.getMetricInstance(with: label, andType: .gauge) {
+        if let gauge: PromGauge<Double, DimensionLabels> = self.getMetricInstance(with: label) {
             return createHandler(gauge)
         }
         return createHandler(createGauge(forType: Double.self, named: label, withLabelType: DimensionLabels.self))
@@ -128,9 +128,9 @@ extension PrometheusClient: MetricsFactory {
     
     private func makeHistogram(label: String, dimensions: [(String, String)]) -> RecorderHandler {
         let createHandler = { (histogram: PromHistogram) -> RecorderHandler in
-            return MetricsHistogram(histogram: histogram, dimensions: dimensions)
+            MetricsHistogram(histogram: histogram, dimensions: dimensions)
         }
-        if let histogram: PromHistogram<Double, DimensionHistogramLabels> = self.getMetricInstance(with: label, andType: .histogram) {
+        if let histogram: PromHistogram<Double, DimensionHistogramLabels> = self.getMetricInstance(with: label) {
             return createHandler(histogram)
         }
         return createHandler(createHistogram(forType: Double.self, named: label, labels: DimensionHistogramLabels.self))
@@ -139,9 +139,9 @@ extension PrometheusClient: MetricsFactory {
     /// Makes a timer
     public func makeTimer(label: String, dimensions: [(String, String)]) -> TimerHandler {
         let createHandler = { (summary: PromSummary) -> TimerHandler in
-            return MetricsSummary(summary: summary, dimensions: dimensions)
+            MetricsSummary(summary: summary, dimensions: dimensions)
         }
-        if let summary: PromSummary<Int64, DimensionSummaryLabels> = self.getMetricInstance(with: label, andType: .summary) {
+        if let summary: PromSummary<Int64, DimensionSummaryLabels> = self.getMetricInstance(with: label) {
             return createHandler(summary)
         }
         return createHandler(createSummary(forType: Int64.self, named: label, labels: DimensionSummaryLabels.self))
@@ -166,28 +166,24 @@ public extension MetricsSystem {
 
 /// A generic `String` based `CodingKey` implementation.
 private struct StringCodingKey: CodingKey {
-    /// `CodingKey` conformance.
     public var stringValue: String
-    
-    /// `CodingKey` conformance.
-    public var intValue: Int? {
-        return Int(self.stringValue)
-    }
-    
-    /// Creates a new `StringCodingKey`.
+
     public init(_ string: String) {
         self.stringValue = string
     }
     
-    /// `CodingKey` conformance.
     public init(stringValue: String) {
         self.stringValue = stringValue
     }
     
-    /// `CodingKey` conformance.
     public init(intValue: Int) {
         self.stringValue = intValue.description
     }
+
+    public var intValue: Int? {
+        return Int(self.stringValue)
+    }
+
 }
 
 

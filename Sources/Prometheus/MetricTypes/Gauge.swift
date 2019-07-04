@@ -3,7 +3,7 @@ import NIOConcurrencyHelpers
 /// Prometheus Gauge metric
 ///
 /// See https://prometheus.io/docs/concepts/metric_types/#gauge
-public class PromGauge<NumType: Numeric, Labels: MetricLabels>: Metric, PrometheusHandled {
+public class PromGauge<NumType: Numeric, Labels: MetricLabels>: PromMetric, PrometheusHandled {
     /// Prometheus instance that created this Gauge
     internal weak var prometheus: PrometheusClient?
     

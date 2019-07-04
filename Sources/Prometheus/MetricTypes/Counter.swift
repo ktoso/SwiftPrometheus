@@ -3,7 +3,7 @@ import NIOConcurrencyHelpers
 /// Prometheus Counter metric
 ///
 /// See https://prometheus.io/docs/concepts/metric_types/#counter
-public class PromCounter<NumType: Numeric, Labels: MetricLabels>: Metric, PrometheusHandled {
+public class PromCounter<NumType: Numeric, Labels: MetricLabels>: PromMetric, PrometheusHandled {
     /// Prometheus instance that created this Counter
     internal weak var prometheus: PrometheusClient?
     

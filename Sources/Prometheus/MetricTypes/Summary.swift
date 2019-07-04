@@ -20,7 +20,7 @@ extension SummaryLabels {
 /// Prometheus Counter metric
 ///
 /// See https://prometheus.io/docs/concepts/metric_types/#summary
-public class PromSummary<NumType: DoubleRepresentable, Labels: SummaryLabels>: Metric, PrometheusHandled {
+public class PromSummary<NumType: DoubleRepresentable, Labels: SummaryLabels>: PromMetric, PrometheusHandled {
     /// Prometheus instance that created this Summary
     internal weak var prometheus: PrometheusClient?
     
